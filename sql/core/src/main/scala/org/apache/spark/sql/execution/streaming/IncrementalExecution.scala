@@ -49,7 +49,8 @@ class IncrementalExecution(
       StatefulAggregationStrategy ::
       FlatMapGroupsWithStateStrategy ::
       StreamingRelationStrategy ::
-      StreamingDeduplicationStrategy :: Nil
+      StreamingDeduplicationStrategy ::
+      ReservoirSampleStrategy :: Nil
   }
 
   /**
@@ -101,6 +102,17 @@ class IncrementalExecution(
           child,
           Some(stateId),
           Some(offsetSeqMetadata.batchWatermarkMs))
+
+      case StreamingReservoirSampleExec(keys, child, reservoirSize, None, None, None) =>
+        val stateId =
+          OperatorStateId(checkpointLocation, operatorId.getAndIncrement(), currentBatchId)
+        StreamingReservoirSampleExec(
+          keys,
+          child,
+          reservoirSize,
+          Some(stateId),
+          Some(offsetSeqMetadata.batchWatermarkMs),
+          Some(outputMode))
 
       case m: FlatMapGroupsWithStateExec =>
         val stateId =

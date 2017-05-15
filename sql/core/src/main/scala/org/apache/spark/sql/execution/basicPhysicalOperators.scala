@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.execution.ui.SparkListenerDriverAccumUpdates
 import org.apache.spark.sql.types.LongType
 import org.apache.spark.util.ThreadUtils
-import org.apache.spark.util.random.{BernoulliCellSampler, PoissonSampler}
+import org.apache.spark.util.random.{BernoulliCellSampler, PoissonSampler, SamplingUtils}
 
 /** Physical plan for Project. */
 case class ProjectExec(projectList: Seq[NamedExpression], child: SparkPlan)
@@ -324,6 +324,23 @@ case class SampleExec(
   }
 }
 
+
+case class ReservoirSampleExec(reservoirSize: Int, child: SparkPlan) extends UnaryExecNode {
+  override def output: Seq[Attribute] = child.output
+
+  override def outputPartitioning: Partitioning = child.outputPartitioning
+
+  protected override def doExecute(): RDD[InternalRow] = {
+    child.execute()
+      .mapPartitions(it => {
+        val (sample, count) = SamplingUtils.reservoirSampleAndCount(it, reservoirSize)
+        sample.map((_, count)).toIterator
+      })
+      .repartition(1)
+      .mapPartitions(it => {
+        SamplingUtils.reservoirSampleWithWeight(it, reservoirSize).iterator})
+  }
+}
 
 /**
  * Physical plan for range (generating a range of 64 bit numbers).

@@ -326,6 +326,18 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   }
 
   /**
+   * Used to plan the streaming reservoir sample operator.
+   */
+  object ReservoirSampleStrategy extends Strategy {
+    override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
+      case ReservoirSample(keys, child, reservoirSize, true) =>
+        StreamingReservoirSampleExec(keys, PlanLater(child), reservoirSize) :: Nil
+
+      case _ => Nil
+    }
+  }
+
+  /**
    * Strategy to convert [[FlatMapGroupsWithState]] logical operator to physical operator
    * in streaming plans. Conversion for batch plans is handled by [[BasicOperators]].
    */
@@ -410,6 +422,8 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
         execution.window.WindowExec(windowExprs, partitionSpec, orderSpec, planLater(child)) :: Nil
       case logical.Sample(lb, ub, withReplacement, seed, child) =>
         execution.SampleExec(lb, ub, withReplacement, seed, planLater(child)) :: Nil
+      case logical.ReservoirSample(keys, child, reservoirSize, false) =>
+        execution.ReservoirSampleExec(reservoirSize, PlanLater(child)) :: Nil
       case logical.LocalRelation(output, data) =>
         LocalTableScanExec(output, data) :: Nil
       case logical.LocalLimit(IntegerLiteral(limit), child) =>

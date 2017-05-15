@@ -1691,6 +1691,14 @@ class Dataset[T] private[sql](
   }
 
   /**
+   * Reservoir Sampling
+   */
+  def reservoir(reservoirSize: Int): Dataset[T] = withTypedPlan {
+    val allColumns = queryExecution.analyzed.output
+    ReservoirSample(allColumns, logicalPlan, reservoirSize, isStreaming)
+  }
+
+  /**
    * Returns a new [[Dataset]] by sampling a fraction of rows, using a random seed.
    *
    * @param withReplacement Sample with replacement or not.
