@@ -48,3 +48,4 @@ install:
 # 6. Run lint-java.
 script:
   - dev/lint-java
+  - build/sbt "testOnly org.apache.spark.sql.streaming.ReservoirSamplingSuit"
