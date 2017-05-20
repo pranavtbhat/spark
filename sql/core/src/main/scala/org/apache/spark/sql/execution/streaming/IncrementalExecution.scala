@@ -103,10 +103,10 @@ class IncrementalExecution(
           Some(stateId),
           Some(offsetSeqMetadata.batchWatermarkMs))
 
-      case StreamingReservoirSampleExec(keys, child, reservoirSize, None, None, None) =>
+      case ReservoirStreamingSampleExec(keys, child, reservoirSize, None, None, None) =>
         val stateId =
           OperatorStateId(checkpointLocation, operatorId.getAndIncrement(), currentBatchId)
-        StreamingReservoirSampleExec(
+        ReservoirStreamingSampleExec(
           keys,
           child,
           reservoirSize,

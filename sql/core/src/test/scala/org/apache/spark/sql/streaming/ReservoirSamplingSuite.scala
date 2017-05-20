@@ -35,7 +35,7 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
 
   test("streaming reservoir sample: reservoir size is larger than stream data size - update mode") {
     val inputData = MemoryStream[String]
-    val result = inputData.toDS().reservoir(4)
+    val result = inputData.toDS().reservoirSampling(4)
 
     testStream(result, Update)(
       AddData(inputData, "a", "b"),
@@ -47,7 +47,7 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
 
   test("streaming reservoir sample: reservoir size is less than stream data size - update mode") {
     val inputData = MemoryStream[String]
-    val result = inputData.toDS().reservoir(1)
+    val result = inputData.toDS().reservoirSampling(1)
 
     testStream(result, Update)(
       AddData(inputData, "a", "a"),
@@ -59,7 +59,7 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
 
   test("streaming reservoir sample with aggregation - update mode") {
     val inputData = MemoryStream[String]
-    val result = inputData.toDS().reservoir(3).groupBy("value").count()
+    val result = inputData.toDS().reservoirSampling(3).groupBy("value").count()
 
     testStream(result, Update)(
       AddData(inputData, "a"),
@@ -74,7 +74,7 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
     val result = inputData.toDS()
       .withColumn("eventTime", $"value".cast("timestamp"))
       .withWatermark("eventTime", "10 seconds")
-      .reservoir(10)
+      .reservoirSampling(10)
       .select($"eventTime".cast("long").as[Long])
 
     testStream(result, Update)(
@@ -96,7 +96,7 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
   test("streaming reservoir sample with aggregation - complete mode") {
     val inputData = MemoryStream[(String, Int)]
     val result = inputData.toDS().select($"_1" as "key", $"_2" as "value")
-      .reservoir(3).groupBy("key").max("value")
+      .reservoirSampling(3).groupBy("key").max("value")
 
     testStream(result, Complete)(
       AddData(inputData, ("a", 1)),
@@ -114,20 +114,20 @@ class ReservoirSamplingSuit extends StateStoreMetricsTest with BeforeAndAfterAll
 
   test("batch reservoir sample") {
     val df = spark.createDataset(Array(1, 2, 3, 4, 5, 6, 7, 8, 9, 0))
-    assert(df.reservoir(3).count() == 3, "")
+    assert(df.reservoirSampling(3).count() == 3, "")
   }
 
   test("batch reservoir sample after aggregation") {
     val df = spark.createDataset((1 to 10).map(e => (e, s"val_$e")))
         .select($"_1" as "key", $"_2" as "value")
         .groupBy("value").count()
-    assert(df.reservoir(3).count() == 3, "")
+    assert(df.reservoirSampling(3).count() == 3, "")
   }
 
   test("batch reservoir sample before aggregation") {
     val df = spark.createDataset((1 to 10).map(e => (e, s"val_$e")))
       .select($"_1" as "key", $"_2" as "value")
-      .reservoir(3)
+      .reservoirSampling(3)
       .groupBy("value").count()
     assert(df.count() == 3, "")
   }

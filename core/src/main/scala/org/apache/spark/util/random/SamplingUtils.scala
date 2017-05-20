@@ -69,36 +69,36 @@ private[spark] object SamplingUtils {
     }
   }
 
-  def reservoirSampleWithWeight[T: ClassTag](
+  def weightedReservoirSample[T: ClassTag](
       input: Iterator[(T, Long)],
-      k: Int,
+      numOfElements: Int,
       seed: Long = Random.nextLong())
     : Array[T] = {
-    val reservoir = new Array[T](k)
-    // Put the first k elements in the reservoir.
-    var i = 0
-    while (i < k && input.hasNext) {
-      val item = input.next()
-      reservoir(i) = item._1
-      i += 1
+    val weightedReservoir = new Array[T](numOfElements)
+    // Put the first numOfElements elements in the reservoir.
+    var counter = 0
+    while (counter < numOfElements && input.hasNext) {
+      val nextElement = input.next()
+      weightedReservoir(counter) = nextElement._1
+      counter += 1
     }
 
-    if (i < k) {
-      val trimReservoir = new Array[T](i)
-      System.arraycopy(reservoir, 0, trimReservoir, 0, i)
+    if (counter < numOfElements) {
+      val trimReservoir = new Array[T](counter)
+      System.arraycopy(weightedReservoir, 0, trimReservoir, 0, counter)
       trimReservoir
     } else {
-      var l = i.toLong
-      val rand = new XORShiftRandom(seed)
+      var longCounter = counter.toLong
+      val randomNum = new XORShiftRandom(seed)
       while (input.hasNext) {
-        val item = input.next()
-        l += 1
-        val replacementIndex = Math.pow(rand.nextDouble(), 1 / item._2).toInt
-        if (replacementIndex < k) {
-          reservoir(replacementIndex.toInt) = item._1
+        val nextElement = input.next()
+        longCounter += 1
+        val replacementIndex = Math.pow(randomNum.nextDouble(), 1 / nextElement._2).toInt
+        if (replacementIndex < numOfElements) {
+          weightedReservoir(replacementIndex.toInt) = nextElement._1
         }
       }
-      reservoir
+      weightedReservoir
     }
   }
 

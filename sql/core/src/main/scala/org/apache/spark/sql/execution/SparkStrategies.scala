@@ -331,7 +331,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   object ReservoirSampleStrategy extends Strategy {
     override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case ReservoirSample(keys, child, reservoirSize, true) =>
-        StreamingReservoirSampleExec(keys, PlanLater(child), reservoirSize) :: Nil
+        ReservoirStreamingSampleExec(keys, PlanLater(child), reservoirSize) :: Nil
 
       case _ => Nil
     }

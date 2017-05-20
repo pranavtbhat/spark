@@ -327,7 +327,7 @@ object StreamingDeduplicateExec {
 /**
  * Physical operator for executing streaming Sampling.
  */
-case class StreamingReservoirSampleExec(
+case class ReservoirStreamingSampleExec(
     keyExpressions: Seq[Attribute],
     child: SparkPlan,
     reservoirSize: Int,
@@ -339,8 +339,8 @@ case class StreamingReservoirSampleExec(
   override def requiredChildDistribution: Seq[Distribution] =
   ClusteredDistribution(keyExpressions) :: Nil
 
-  private val enc = Encoders.STRING.asInstanceOf[ExpressionEncoder[String]]
-  private val NUM_RECORDS_IN_PARTITION = enc.toRow("NUM_RECORDS_IN_PARTITION")
+  private val encoded = Encoders.STRING.asInstanceOf[ExpressionEncoder[String]]
+  private val NUM_RECORDS_IN_PARTITION = encoded.toRow("NUM_RECORDS_IN_PARTITION")
     .asInstanceOf[UnsafeRow]
 
   override protected def doExecute(): RDD[InternalRow] = {
@@ -355,15 +355,15 @@ case class StreamingReservoirSampleExec(
       keyExpressions.toStructType,
       child.output.toStructType,
       sqlContext.sessionState,
-      Some(sqlContext.streams.stateStoreCoordinator)) { (store, iter) =>
+      Some(sqlContext.streams.stateStoreCoordinator)) { (stateStore, iter) =>
 
-      val numRecordsInPart = store.get(NUM_RECORDS_IN_PARTITION).map(value => {
+      val numRecordsInPartition = stateStore.get(NUM_RECORDS_IN_PARTITION).map(value => {
         value.get(0, LongType).asInstanceOf[Long]
       }).getOrElse(0L)
 
       val seed = Random.nextLong()
-      val rand = new XORShiftRandom(seed)
-      var numSamples = numRecordsInPart
+      val randomSeed = new XORShiftRandom(seed)
+      var numOfSamples = numRecordsInPartition
       var count = 0
 
       val baseIterator = watermarkPredicateForData match {
@@ -373,28 +373,28 @@ case class StreamingReservoirSampleExec(
 
       baseIterator.foreach { r =>
         count += 1
-        if (numSamples < reservoirSize) {
-          numSamples += 1
-          store.put(enc.toRow(numSamples.toString).asInstanceOf[UnsafeRow],
+        if (numOfSamples < reservoirSize) {
+          numOfSamples += 1
+          stateStore.put(encoded.toRow(numOfSamples.toString).asInstanceOf[UnsafeRow],
             r.asInstanceOf[UnsafeRow])
         } else {
-          val randomIdx = (rand.nextDouble() * (numRecordsInPart + count)).toLong
+          val randomIdx = (randomSeed.nextDouble() * (numRecordsInPartition + count)).toLong
           if (randomIdx <= reservoirSize) {
-            val replacementIdx = enc.toRow(randomIdx.toString).asInstanceOf[UnsafeRow]
-            store.put(replacementIdx, r.asInstanceOf[UnsafeRow])
+            val replacementIdx = encoded.toRow(randomIdx.toString).asInstanceOf[UnsafeRow]
+            stateStore.put(replacementIdx, r.asInstanceOf[UnsafeRow])
           }
         }
       }
 
       val numRecordsTillNow = UnsafeProjection.create(Array[DataType](LongType))
-        .apply(InternalRow.apply(numRecordsInPart + count))
-      store.put(NUM_RECORDS_IN_PARTITION, numRecordsTillNow)
-      store.commit()
+        .apply(InternalRow.apply(numRecordsInPartition + count))
+      stateStore.put(NUM_RECORDS_IN_PARTITION, numRecordsTillNow)
+      stateStore.commit()
 
       outputMode match {
         case Some(Complete) =>
           CompletionIterator[InternalRow, Iterator[InternalRow]](
-            store.iterator().filter(kv => {
+            stateStore.iterator().filter(kv => {
               !kv._1.asInstanceOf[UnsafeRow].equals(NUM_RECORDS_IN_PARTITION)
             }).map(kv => {
               UnsafeProjection.create(withSumFieldTypes).apply(InternalRow.fromSeq(
@@ -403,7 +403,7 @@ case class StreamingReservoirSampleExec(
             }), {})
         case Some(Update) =>
           CompletionIterator[InternalRow, Iterator[InternalRow]](
-            store.updates()
+            stateStore.updates()
               .filter(update => !update.key.equals(NUM_RECORDS_IN_PARTITION))
               .map(update => {
                 UnsafeProjection.create(withSumFieldTypes).apply(InternalRow.fromSeq(
@@ -415,7 +415,7 @@ case class StreamingReservoirSampleExec(
             s"for streaming sampling.")
       }
     }.repartition(1).mapPartitions(it => {
-      SamplingUtils.reservoirSampleWithWeight(
+      SamplingUtils.weightedReservoirSample(
         it.map(item => (item, item.getLong(keyExpressions.size))), reservoirSize)
         .map(row =>
           UnsafeProjection.create(fieldTypes)

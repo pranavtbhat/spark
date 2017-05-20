@@ -1693,9 +1693,9 @@ class Dataset[T] private[sql](
   /**
    * Reservoir Sampling
    */
-  def reservoir(reservoirSize: Int): Dataset[T] = withTypedPlan {
-    val allColumns = queryExecution.analyzed.output
-    ReservoirSample(allColumns, logicalPlan, reservoirSize, isStreaming)
+  def reservoirSampling(reservoirSize: Int): Dataset[T] = withTypedPlan {
+    val allAnalyzedColumns = queryExecution.analyzed.output
+    ReservoirSample(allAnalyzedColumns, logicalPlan, reservoirSize, isStreaming)
   }
 
   /**

@@ -338,7 +338,7 @@ case class ReservoirSampleExec(reservoirSize: Int, child: SparkPlan) extends Una
       })
       .repartition(1)
       .mapPartitions(it => {
-        SamplingUtils.reservoirSampleWithWeight(it, reservoirSize).iterator})
+        SamplingUtils.weightedReservoirSample(it, reservoirSize).iterator})
   }
 }
 
